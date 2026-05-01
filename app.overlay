@@ -1,0 +1,17 @@
+&i2c0 {
+	status = "okay";
+
+	tlc59108: tlc59108@20 {
+		compatible = "ti,tlc59108";
+		reg = <0x20>;
+		label = "LED_DRIVER";
+	};
+	
+	nau7802: nau7802@2A {
+		reg = <0x2A>;
+		label = "ADC";
+	};
+
+	clock-frequency = <I2C_BITRATE_STANDARD>;
+};
+

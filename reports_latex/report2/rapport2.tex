@@ -1,0 +1,227 @@
+\documentclass[12pt, a4paper]{article}
+\usepackage{babel}
+\usepackage{cleveref}
+\usepackage{graphicx}
+
+% Setter mindre marginer for å få mer plass
+\usepackage[margin=2.5cm]{geometry}
+
+% Pakke for å ha figurer ved siden av tekst
+\usepackage{wrapfig}
+
+% Pakke for å tegne fine figurer
+\usepackage{tikz}
+\usetikzlibrary{calc,trees,positioning,arrows,chains,shapes.geometric,  decorations.pathreplacing,decorations.pathmorphing,shapes,  matrix,shapes.symbols}
+
+% Må ha for referanselista
+\usepackage{url}
+
+
+\title{
+    Project \#2\\
+    \large Mimicking of DB2.x-Firmware\\
+}
+\author{
+    Stein Lysberg
+}
+
+
+\begin{document}
+    \tikzstyle{block} = [rectangle, draw, text width=8em, text centered, rounded      corners, minimum height=1.6em]
+
+    \maketitle
+    \tableofcontents
+    \thispagestyle{empty}
+    \addtocounter{page}{-1}
+    \clearpage
+    \section{Introduction}
+
+        This report is the second in a series of five, about the making of a plastic scanner. This report looks at
+        the code written by the makers of the plastic scanner PCB (referred to as the Arduino code) \cite{DB23}, and maps out how its functionality can be implemented
+        using a nRF52 DK running Zephyr Real Time Operating System (RTOS). Some technology and design choices made will also be addressed.
+
+        \subsection{The Arduino code}
+
+            \begin{wrapfigure}[12]{r}{0.4\textwidth}
+            \centering
+            \vspace{-30pt}
+                \begin{tikzpicture}
+                    [node distance=1cm,
+                    start chain=going below,]
+                   \node (n1) at (0,0) [block]  {Power on};
+                   \node (n2) [block, below of=n1] {Start serial communication};
+                   \node (n3) [block, below of=n2] {Start I$^2$C};
+                   \node (n4) [block, below of=n3] {LED-driver setup};
+                   \node (n5) [block, below of=n4] {ADC setup};
+                   \node (n6) [block, below of=n5] {ADC calibration};
+                   \node (n7) [block, below of=n6] {Await commands};
+                   % Connectors
+                   \draw [->] (n1) -- (n2);
+                   \draw [->] (n2) -- (n3);
+                   \draw [->] (n3) -- (n4);
+                   \draw [->] (n4) -- (n5);
+                   \draw [->] (n5) -- (n6);
+                   \draw [->] (n6) -- (n7);
+                   \draw [->] (n6) -- (n7);
+                   \end{tikzpicture}
+            \caption{Arduino workflow chart}
+            \label{fig:arduinoflow}
+            \end{wrapfigure}
+
+            \Cref{fig:arduinoflow} shows a simple model of the flow of the code written for Arduino. After powering up, it gets ready to communicate
+            to the connected computer via UART, as well as the on-board chips via I$^2$C. Following this, it performs a set-up routine for the LED-driver chip,
+            and the ADC chip. It then calibrates the ADC, before it idles and awaits a command. It uses a Command-Line Interface (CLI) to control the plastic
+            scanner from the computer terminal, which lets a user tell it what to do in real-time. The code written for this application will mimic the Arduino
+            code, but differ in some ways, mainly in the exclusion of the CLI.
+            
+        \subsection{Technologies}
+
+            This section looks at some of the technologies used in the plastic scanner, namely the Zephyr RTOS,
+            I$^2$C, and the devicetree.
+            
+
+            \subsubsection{Zephyr RTOS}
+
+                Zephyr RTOS is an open source real time operating system made for embedded devices, with emphasis on microcontrollers \cite{zephyr}.
+                It uses the C language, and is Nordic Semiconductors recommended way of programming an nRF52 DK. 
+
+            \subsubsection{I$^2$C}
+            
+                I$^2$C (Inter-Integrated Circuit) is a standard for data transmission between devices, across two wires.
+                One wire transmits data, and one has the clock. There can be multiple devices on the same I$^2$C-bus, and 
+                these are distiguished by having different addresses. This standard is commonly used for relatively cheap
+                and small applications, and over small distances \cite{i2c}. In this application it is used for communication between the
+                microcontroller on the nRF52 DK, and the analog-to-digital converter (ADC) as well as the LED-driver.
+
+            \subsubsection{Devicetree}
+
+                The devicetree is a data structure to keep track of how hardware is connected, and how to communicate with it.
+                Its purpose is to ease the job of making the same code usable in different environments \cite{devicetree}.
+                For the microcontroller to communicate with the ADC and LED-driver via I$^2$C, they must be added to the device tree.
+
+        \clearpage
+        \subsection{Hardware and code}
+
+        \begin{figure}
+            \centering
+            \vspace{10pt}
+                \begin{tikzpicture}
+                    [node distance=1.5cm,]
+                   \node (n1) at (0,0) [block]  {Computer};
+                   \node (n2) [block, below of=n1] {Debugger};
+                   \node (n3) [block, below of=n2] {NRF52832};
+                   \node (n4) [block, right = 1.4 cm of n3] {TLC5920F};
+                   \node (n5) [block, left = 1.4 cm of n3] {NAU7802};
+                   \node (n6) [block, above of=n4] {LEDs};
+                   \node (n7) [block, above of=n5] {Photodiode};
+
+                   % Connectors
+                   \draw [->] (n1) -- (n2);
+                   \draw [->] (n2) -- (n3);
+                   \draw [->] (n3) -- (n4)node[midway, above] {I$^2$C};
+                   \draw [->] (n3) -- (n5)node[midway, above] {I$^2$C};
+                   \draw [->] (n4) -- (n6);
+
+                   \draw [->] (n2) -- (n1);
+                   \draw [->] (n3) -- (n2);
+                   \draw [->] (n4) -- (n3);
+                   \draw [->] (n5) -- (n3);
+                   \draw [->] (n7) -- (n5);
+                   \end{tikzpicture}
+            \caption{System architecture}
+            \label{fig:systemarchitecture}
+        \end{figure}
+        
+
+            \begin{wrapfigure}[12]{r}{0.4\textwidth}
+                \centering
+                \vspace{-20pt}
+                    \begin{tikzpicture}
+                        [node distance=0.8cm,
+                        start chain=going below,]
+                    \node (n1) at (0,0) [block]  {Power on};
+                    \node (n2) [block, below of=n1] {LED-driver setup};
+                    \node (n3) [block, below of=n2] {ADC setup};
+                    \node (n4) [block, below of=n3] {ADC calibration};
+                    \node (n5) [block, below of=n4] {LED on};
+                    \node (n6) [block, below of=n5] {Read ADC};
+                    \node (n7) [block, below of=n6] {LED off};
+                    \node (n8) [block, below of=n7] {Print results};
+                    % Connectors
+                    \draw [->] (n1) -- (n2);
+                    \draw [->] (n2) -- (n3);
+                    \draw [->] (n3) -- (n4);
+                    \draw [->] (n4) -- (n5);
+                    \draw [->] (n5) -- (n6);
+                    \draw [->] (n6) -- (n7);
+                    \draw [->] (n6) -- (n7);
+                    \draw [->] (n7) -- (n8);
+                    \draw [->] (n8.west) -| ++(-0.4,0) |- (n5.west);
+                    \draw [->] (n7.east) -| ++(0.4,0) |- (n5.east)node[midway, right] {5x};
+                    \end{tikzpicture}
+                \caption{Workflow chart}
+                \label{fig:workflow}
+            \end{wrapfigure}
+            
+            \Cref{fig:systemarchitecture} shows a simple schematic of how hardware is connected in this application. The microcontroller, a NRF52832,
+            communicates to the computer via another NRF52832 called the \textit{debugger} in the nRF52 DK. The microcontroller also communicates with
+            the chips on the PCB, namely the NAU7802and the TLC5920F, using I$^C$C.
+            \Cref{fig:workflow} shows the flow of the code written for the nRF52 DK. It differs from the Arduino code (\cref{fig:arduinoflow}),
+            mainly in that there is no use of a command line interface. Once it is powered up and has done its setup routine, it simply loops
+            while printing the values from its scans.
+
+            \subsubsection{LED-driver}
+                This project uses a Texas Instruments TLC59208F as a LED-driver. In \cref{fig:workflow}, setup of the LED-driver means establishing communication
+                using I$^2$C, and then appropriately configuring the device for use in this application.
+            
+            \subsubsection{ADC}
+                A Nuvoton NAU7802 is used as an ADC in this project. As with the LED-driver, setup means establishing communication, and configuration.
+                In addition to this, the ADC should be calibrated using its own internal calibration routine, before it can be used. Otherwise, it
+                might produce unreliable results \cite{nau}.
+
+            \subsubsection{The loop}
+                Once the LED-driver and ADC are ready, the code enters a loop. First the first LED is turned on, then a reading is requested from the ADC. After
+                making sure the reading is ready, it is retrieved and stored, and then the first LED is turned off again. This process is repeated
+                an additional five times for LEDs 2-6, after which the results are printed to the console. The loop then starts over with the first LED.
+
+        \section{Discussion}
+
+            This section will discuss two of the choices which have been made for this project, first the choice between using Arduino and Zephyr RTOS,
+            and secondly whether it is sufficient to use a simple loop rather than a command line interface.
+            
+            \subsection{Arduino vs. Zephyr RTOS}
+                The Arduino programming language is based on C++, but writes like its own language. It is made to be easy to use, and there are abundant resources available for it online.
+                Although there are Arduino products marketed towards proffesionals \cite{arduinopro}, it is largely considered a platform for
+                education and hobby projects.
+                Code for Zephyr RTOS is written in C. It is more used in industrial applications, and not made to be as user-friendly as Arduino. Zephyr RTOS is a more
+                appropriate platform for this project than Arduino, because it is more geared towards proffesional and industrial application.
+                It presents more of a challenge, and in return offers a higher level of control.
+
+            \subsection{Loop vs. CLI}
+                The Arduino code uses a command line interface to control the plastic scanner,
+                while the code for this project simply loops, without the ability to receive input (as
+                shown in \cref{fig:arduinoflow,fig:workflow}). Using a command line interface is the
+                better solution, because it allows for more control while the device is in use, and allows
+                for expansion of the functionality by adding more commands down the line. The code for this
+                project was made to loop because it is easier to implement and sufficient for the purposes of this project.
+                Other ways to control the plastic
+                scanner can be made later, if needed, but a simple loop is sufficient for now.
+
+        \section{Conclusion}
+
+            This report has looked at the start of a process to mimic the plastic scanner code written for Arduino, and how it will be implemented using Zephyr RTOS on
+            the nRF52 development board. Some of the technologies involved have been discussed, such as I$^2$C and the devicetree.
+            The workflow of the Arduino code has also been investigated, and compared to the workflow which will
+            be implemented in this project, with special attention to whether or not to include a command line interface.
+            This brief report presents the foundation on which the rest of the project will be built.
+
+
+
+
+
+    \clearpage
+    \addcontentsline{toc}{section}{References}  
+    \bibliographystyle{IEEEtran}
+    \bibliography{bibliography}
+
+\end{document}
